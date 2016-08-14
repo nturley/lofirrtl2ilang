@@ -59,7 +59,7 @@ class FIRRTLPrintListener(FIRRTLListener):
         self.currWire = Wire()
 
     def enterReg_id(self, ctx):
-        self.currWire.wire_id = ctx.getText()
+        self.currWire.wire_id = '\\' + ctx.getText()
 
     def exitReg(self, ctx):
         print '  ' + str(self.currWire)
@@ -75,7 +75,7 @@ class FIRRTLPrintListener(FIRRTLListener):
 
 
 def main():
-    lexer = FIRRTLLexer(FileStream('example.fir'))
+    lexer = FIRRTLLexer(FileStream('lofirrtl/gcd.fir'))
     lexer.denter = Denter(lexer)
     stream = CommonTokenStream(lexer)
     parser = FIRRTLParser(stream)
