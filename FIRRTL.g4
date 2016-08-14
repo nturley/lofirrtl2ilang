@@ -106,8 +106,8 @@ reset_block
   ;
 
 stmt
-  : 'wire' fid ':' ftype info?
-  | 'reg' fid ':' ftype exp ('with' ':' reset_block)? info?
+  : wire
+  | reg
   | 'mem' fid ':' info? INDENT memField* DEDENT
   | 'cmem' fid ':' ftype info?
   | 'smem' fid ':' ftype info?
@@ -121,6 +121,38 @@ stmt
   | 'stop(' exp exp IntLit ')' info?
   | 'printf(' exp exp StringLit ( exp)* ')' info?
   | 'skip' info?
+  ;
+
+wire
+  : 'wire' wire_id ':' wire_type info?
+  ;
+
+wire_id
+  : fid
+  ;
+
+wire_type
+  : ftype
+  ;
+
+reg
+  : 'reg' reg_id ':' reg_type reg_clk (reg_reset)?
+  ;
+
+reg_id
+  : fid
+  ;
+
+reg_type
+  : ftype
+  ;
+
+reg_clk
+  : exp
+  ;
+
+reg_reset
+  : 'with' ':' reset_block
   ;
 
 memField
