@@ -1,7 +1,7 @@
 from antlr4 import *
-from FIRRTLLexer import FIRRTLLexer
-from FIRRTLListener import FIRRTLListener
-from FIRRTLParser import FIRRTLParser
+from lofirrtlLexer import lofirrtlLexer
+from lofirrtlListener import lofirrtlListener
+from lofirrtlParser import lofirrtlParser
 from denting import Denter
 import sys
 
@@ -27,7 +27,7 @@ class Module:
     def __init__(self, fid):
         self.fid = fid
 
-class FIRRTLPrintListener(FIRRTLListener):
+class lofirrtlPrintListener(lofirrtlListener):
     def setupMembers(self):
         self.wires = {}
         self.currWire = None
@@ -73,15 +73,32 @@ class FIRRTLPrintListener(FIRRTLListener):
         if self.currWire:
             self.currWire.width = int(ctx.getText())
 
+    def enterNode(self, ctx):
+        self.currWire = Wire()
+
+    def exitNode(self, ctx):
+        #print '  ' + str(self.currWire)
+        print '  nodes are complicated'
+        self.currWire = None
+
+    def enterNode_id(self, ctx):
+        self.currWire.wire_id = '\\' + ctx.getText()
+
+    def enterNode_value(self, ctx):
+        pass
+
+    def exitNode_value(self, ctx):
+        pass
+
 
 def main():
-    lexer = FIRRTLLexer(FileStream('lofirrtl/gcd.fir'))
+    lexer = lofirrtlLexer(FileStream('lofirrtl/gcd.fir'))
     lexer.denter = Denter(lexer)
     stream = CommonTokenStream(lexer)
-    parser = FIRRTLParser(stream)
+    parser = lofirrtlParser(stream)
     tree = parser.circuit()
 
-    printer = FIRRTLPrintListener()
+    printer = lofirrtlPrintListener()
     printer.setupMembers()
     walker = ParseTreeWalker()
     walker.walk(printer, tree)

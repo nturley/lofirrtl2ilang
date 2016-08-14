@@ -1,6 +1,6 @@
-FIRRTL.tokens
-FIRRTLLexer.py
-FIRRTLLexer.tokens
-FIRRTLListener.py
-FIRRTLParser.py
+lofirrtl.tokens
+lofirrtlLexer.py
+lofirrtlLexer.tokens
+lofirrtlListener.py
+lofirrtlParser.py
 *.pyc

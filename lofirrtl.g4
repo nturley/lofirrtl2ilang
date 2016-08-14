@@ -24,7 +24,10 @@ ANY, PROVIDED HEREUNDER IS PROVIDED "AS IS". REGENTS HAS NO OBLIGATION
 TO PROVIDE MAINTENANCE, SUPPORT, UPDATES, ENHANCEMENTS, OR
 MODIFICATIONS.
 */
-grammar FIRRTL;
+
+
+
+grammar lofirrtl;
 
 tokens { INDENT, DEDENT }
 
@@ -76,8 +79,8 @@ port_type
   ;
 
 ftype
-  : 'UInt' ('<' ftype_width '>')?
-  | 'SInt' ('<' ftype_width '>')?
+  : 'UInt' '<' ftype_width '>'
+  | 'SInt' '<' ftype_width '>'
   | 'Clock'
   ;
 
@@ -93,7 +96,15 @@ moduleBlock
   : simple_stmt*
   ;
 
-simple_reset0:  'reset' '=>' '(' exp exp ')';
+simple_reset0:  'reset' '=>' '(' reset_signal init_val ')';
+
+reset_signal
+  : exp
+  ;
+
+init_val
+  : exp
+  ;
 
 simple_reset
 	: simple_reset0
@@ -112,16 +123,51 @@ stmt
   | 'cmem' fid ':' ftype info?
   | 'smem' fid ':' ftype info?
   | mdir 'mport' fid '=' fid '[' exp ']' exp info?
-  | 'inst' fid 'of' fid info?
-  | 'node' fid '=' exp info?
-  | exp '<=' exp info?
-  | exp '<-' exp info?
+  | instance
+  | node
+  | connect
   | exp 'is' 'invalid' info?
-  | when
   | 'stop(' exp exp IntLit ')' info?
   | 'printf(' exp exp StringLit ( exp)* ')' info?
   | 'skip' info?
   ;
+
+instance
+  : 'inst' instance_id 'of' instance_of_id info?
+  ;
+
+instance_id
+  : fid
+  ;
+
+instance_of_id
+  : fid
+  ;
+
+connect
+  : connected_to '<=' connected_from info?
+  ;
+
+connected_to
+  : exp
+  ;
+
+connected_from
+  : exp
+  ;
+
+node
+  : 'node' node_id '=' node_value info?
+  ;
+
+node_id
+  : fid
+  ;
+
+node_value
+  : exp
+  ;
+
 
 wire
   : 'wire' wire_id ':' wire_type info?
@@ -182,10 +228,6 @@ suite
   | INDENT simple_stmt+ DEDENT
   ;
 
-when
-  : 'when' exp ':' info? suite? ('else' ( when | ':' info? suite?) )?
-  ;
-
 info
   : FileInfo
   ;
@@ -204,17 +246,91 @@ ruw
   ;
 
 exp
-  : 'UInt' ('<' IntLit '>')? '(' IntLit ')'
-  | 'SInt' ('<' IntLit '>')? '(' IntLit ')'
-  | 'UBits' ('<' IntLit '>')? '(' StringLit ')'
-  | 'SBits' ('<' IntLit '>')? '(' StringLit ')'
-  | fid    // Ref
-  | exp '.' fid
-  | exp '[' IntLit ']'
-  | exp '[' exp ']'
-  | 'mux(' exp exp exp ')'
-  | 'validif(' exp exp ')'
-  | primop exp* IntLit*  ')'
+  : const
+  | ref
+  | mux
+  | validif
+  | primop
+  ;
+
+validif
+  : 'validif(' is_valid valid_in ')'
+  ;
+
+is_valid
+  : exp
+  ;
+
+valid_in
+  : exp
+  ;
+
+mux
+  : 'mux(' mux_pred mux_pred_high mux_pred_else ')'
+  ;
+
+mux_pred
+  : exp
+  ;
+
+mux_pred_high
+  : exp
+  ;
+
+mux_pred_else
+  : exp
+  ;
+
+ref
+  : fid
+  ;
+
+const
+  : uint_const
+  | sint_const
+  | ubit_const
+  | sbit_const
+  ;
+
+uint_const
+  : 'UInt' '<' const_width '>' '(' const_ival ')'
+  ;
+
+sint_const
+  : 'SInt' '<' const_width '>' '(' const_ival ')'
+  ;
+
+ubit_const
+  : 'UBits' '<' const_width '>' '(' const_bval ')'
+  ;
+
+sbit_const
+  : 'SBits' '<' const_width '>' '(' const_bval ')'
+  ;
+
+const_width
+  : IntLit
+  ;
+
+const_ival
+  : IntLit
+  ;
+
+const_bval
+  : StringLit
+  ;
+
+// primop name includes open parenthesis
+primop
+  : primop_name op_arguments  op_parameters ')'
+  ;
+
+op_arguments
+  : exp*
+  ;
+
+op_parameters
+  : IntLit*
   ;
 
 fid
@@ -222,6 +338,7 @@ fid
   | keyword
   ;
 
+// I think this is just error detection
 keyword
   : 'circuit'
   | 'module'
@@ -273,7 +390,7 @@ keyword
 
 // Parentheses are added as part of name because semantics require no space between primop and open parentheses
 // (And ANTLR either ignores whitespace or considers it everywhere)
-primop
+primop_name
   : 'add('
   | 'sub('
   | 'mul('

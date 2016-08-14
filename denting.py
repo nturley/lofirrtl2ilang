@@ -1,10 +1,10 @@
-from FIRRTLParser import FIRRTLParser
+from lofirrtlParser import lofirrtlParser
 from antlr4 import Token, Lexer
 from antlr4.Token import CommonToken
 
-NEWLINE = FIRRTLParser.NEWLINE
-INDENT = FIRRTLParser.INDENT
-DEDENT = FIRRTLParser.DEDENT
+NEWLINE = lofirrtlParser.NEWLINE
+INDENT = lofirrtlParser.INDENT
+DEDENT = lofirrtlParser.DEDENT
 
 class Denter:
     def __init__(self, lexer):
