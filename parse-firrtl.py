@@ -179,8 +179,6 @@ class lofirrtlPrintListener(lofirrtlListener):
         # if you know your type, tell your parent
         if hasattr(ctx, 'ftype'):
             ctx.parentCtx.ftype = ctx.ftype
-        else:
-            print 'hmmm'
 
     def enterRef(self, ctx):
         refname = '\\' + ctx.getText()
@@ -190,7 +188,8 @@ class lofirrtlPrintListener(lofirrtlListener):
             # tell exp your type
             ctx.parentCtx.ftype = wire.ftype
         else:
-            print 'cant find: ' + refname
+            if self.currWire.wire_id != refname:
+                print 'cant find: ' + refname
 
     def exitConst(self, ctx):
         # tell exp your type
@@ -204,13 +203,11 @@ class lofirrtlPrintListener(lofirrtlListener):
         # if you know your type, tell mux
         if hasattr(ctx,'ftype'):
             ctx.parentCtx.high_type = ctx.ftype
-        print ctx.getText()
 
     def exitMux_pred_else(self, ctx):
         # if you know your type, tell mux
         if hasattr(ctx,'ftype'):
             ctx.parentCtx.else_type = ctx.ftype
-        print 'hiii'
 
     def exitMux(self, ctx):
         # if either of your kids know their type, tell your parent
@@ -219,7 +216,7 @@ class lofirrtlPrintListener(lofirrtlListener):
         elif hasattr(ctx,'else_type'):
             ctx.parentCtx.ftype = ctx.else_type
         else:
-            print 'hoooo'
+            print 'something screwy is going on here'
 
     def enterValid_in(self, ctx):
         # if you know your type, tell your parent
@@ -232,34 +229,24 @@ class lofirrtlPrintListener(lofirrtlListener):
             ctx.parentCtx.ftype = ctx.ftype
 
     def enterPrimop(self, ctx):
-        print 'enter primop'
         ctx.argtypes = []
         ctx.params = []
         ctx.opname = None
 
     def enterPrimop_name(self, ctx):
-        print 'enter name: ' + ctx.getText()[:-1]
         ctx.parentCtx.opname = ctx.getText()[:-1]
 
     def exitPrimop_name(self, ctx):
-        print 'exit name: ' + ctx.getText()[:-1]
         ctx.parentCtx.opname = ctx.getText()[:-1]
 
     def exitOp_argument(self, ctx):
-        print 'exit arg: ' + ctx.getText()
         if hasattr(ctx,'ftype'):
             ctx.parentCtx.argtypes.append(ctx.ftype)
 
     def exitOp_parameter(self, ctx):
-        print 'PARAM!'
-        print ctx.getText()
         ctx.parentCtx.params.append(int(ctx.getText()))
 
     def exitPrimop(self, ctx):
-        print 'exit primop'
-        print ctx.opname
-        for t in ctx.argtypes:
-            print t
         ftype = primop_type(ctx.opname, ctx.argtypes, ctx.params)
         ctx.parentCtx.ftype = ftype
 

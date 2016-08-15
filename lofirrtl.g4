@@ -301,7 +301,7 @@ const_bval
 
 // primop name includes open parenthesis
 primop
-  : primop_name op_argument*  op_parameter ')'
+  : primop_name op_argument*  op_parameter* ')'
   ;
 
 op_argument
@@ -309,7 +309,7 @@ op_argument
   ;
 
 op_parameter
-  : IntLit*
+  : IntLit
   ;
 
 fid
