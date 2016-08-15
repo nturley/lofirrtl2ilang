@@ -62,7 +62,7 @@ module_id
   ;
 
 port
-  : port_dir port_id ':' ftype info? NEWLINE
+  : port_dir port_id ':' port_type info? NEWLINE
   ;
 
 port_id
@@ -126,7 +126,7 @@ stmt
   | instance
   | node
   | connect
-  | exp 'is' 'invalid' info?
+  | fid 'is' 'invalid' info?
   | 'stop(' exp exp IntLit ')' info?
   | 'printf(' exp exp StringLit ( exp)* ')' info?
   | 'skip' info?
@@ -145,29 +145,24 @@ instance_of_id
   ;
 
 connect
-  : connected_to '<=' connected_from info?
+  : connected_lhs '<=' connected_rhs info?
   ;
 
-connected_to
-  : exp
+connected_lhs
+  : ref
   ;
 
-connected_from
+connected_rhs
   : exp
   ;
 
 node
-  : 'node' node_id '=' node_value info?
+  : 'node' node_id '=' exp info?
   ;
 
 node_id
   : fid
   ;
-
-node_value
-  : exp
-  ;
-
 
 wire
   : 'wire' wire_id ':' wire_type info?
@@ -286,26 +281,10 @@ ref
   ;
 
 const
-  : uint_const
-  | sint_const
-  | ubit_const
-  | sbit_const
-  ;
-
-uint_const
   : 'UInt' '<' const_width '>' '(' const_ival ')'
-  ;
-
-sint_const
-  : 'SInt' '<' const_width '>' '(' const_ival ')'
-  ;
-
-ubit_const
-  : 'UBits' '<' const_width '>' '(' const_bval ')'
-  ;
-
-sbit_const
-  : 'SBits' '<' const_width '>' '(' const_bval ')'
+  | 'SInt' '<' const_width '>' '(' const_ival ')'
+  | 'UBits' '<' const_width '>' '(' const_bval ')'
+  | 'SBits' '<' const_width '>' '(' const_bval ')'
   ;
 
 const_width
@@ -322,14 +301,14 @@ const_bval
 
 // primop name includes open parenthesis
 primop
-  : primop_name op_arguments  op_parameters ')'
+  : primop_name op_argument*  op_parameter ')'
   ;
 
-op_arguments
-  : exp*
+op_argument
+  : exp
   ;
 
-op_parameters
+op_parameter
   : IntLit*
   ;
 
