@@ -62,7 +62,7 @@ module_id
   ;
 
 port
-  : port_dir port_id ':' port_type info? NEWLINE
+  : port_dir port_id ':' ftype info? NEWLINE
   ;
 
 port_id
@@ -74,29 +74,23 @@ port_dir
   | 'output'
   ;
 
-port_type
-  : ftype
-  ;
-
 ftype
-  : 'UInt' '<' ftype_width '>'
-  | 'SInt' '<' ftype_width '>'
+  : 'UInt' '<' width '>'
+  | 'SInt' '<' width '>'
   | 'Clock'
   ;
 
-ftype_width
+width
   : IntLit
-  ;
-
-field
-  : 'flip'? fid ':' ftype
   ;
 
 moduleBlock
   : simple_stmt*
   ;
 
-simple_reset0:  'reset' '=>' '(' reset_signal init_val ')';
+simple_reset0
+  :  'reset' '=>' '(' reset_signal init_val ')'
+  ;
 
 reset_signal
   : exp
@@ -157,35 +151,31 @@ connected_rhs
   ;
 
 node
-  : 'node' node_id '=' exp info?
+  : 'node' node_id '=' node_val info?
   ;
 
 node_id
   : fid
   ;
 
+node_val
+  : exp
+  ;
+
 wire
-  : 'wire' wire_id ':' wire_type info?
+  : 'wire' wire_id ':' ftype info?
   ;
 
 wire_id
   : fid
   ;
 
-wire_type
-  : ftype
-  ;
-
 reg
-  : 'reg' reg_id ':' reg_type reg_clk (reg_reset)?
+  : 'reg' reg_id ':' ftype reg_clk (reg_reset)?
   ;
 
 reg_id
   : fid
-  ;
-
-reg_type
-  : ftype
   ;
 
 reg_clk
@@ -211,18 +201,6 @@ simple_stmt
   : stmt | NEWLINE
   ;
 
-/*
-    We should provide syntatctical distinction between a "moduleBody" and a "suite":
-    - statements require a "suite" which means they can EITHER have a "simple statement" (one-liner) on the same line
-        OR a group of one or more _indented_ statements after a new-line. A "suite" may _not_ be empty
-    - modules on the other hand require a group of one or more statements without any indentation to follow "port"
-        definitions. Let's call that _the_ "moduleBody". A "moduleBody" could possibly be empty
-*/
-suite
-  : simple_stmt
-  | INDENT simple_stmt+ DEDENT
-  ;
-
 info
   : FileInfo
   ;
@@ -243,37 +221,7 @@ ruw
 exp
   : const
   | ref
-  | mux
-  | validif
   | primop
-  ;
-
-validif
-  : 'validif(' is_valid valid_in ')'
-  ;
-
-is_valid
-  : exp
-  ;
-
-valid_in
-  : exp
-  ;
-
-mux
-  : 'mux(' mux_pred mux_pred_high mux_pred_else ')'
-  ;
-
-mux_pred
-  : exp
-  ;
-
-mux_pred_high
-  : exp
-  ;
-
-mux_pred_else
-  : exp
   ;
 
 ref
@@ -281,14 +229,10 @@ ref
   ;
 
 const
-  : 'UInt' '<' const_width '>' '(' const_ival ')'
-  | 'SInt' '<' const_width '>' '(' const_ival ')'
-  | 'UBits' '<' const_width '>' '(' const_bval ')'
-  | 'SBits' '<' const_width '>' '(' const_bval ')'
-  ;
-
-const_width
-  : IntLit
+  : 'UInt' '<' width '>' '(' const_ival ')'
+  | 'SInt' '<' width '>' '(' const_ival ')'
+  | 'UBits' '<' width '>' '(' const_bval ')'
+  | 'SBits' '<' width '>' '(' const_bval ')'
   ;
 
 const_ival
@@ -402,6 +346,8 @@ primop_name
   | 'bits('
   | 'head('
   | 'tail('
+  | 'mux('
+  | 'validif('
   ;
 
 /*------------------------------------------------------------------

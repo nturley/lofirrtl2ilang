@@ -5,6 +5,165 @@ from lofirrtlParser import lofirrtlParser
 from denting import Denter
 import sys
 
+
+class Type:
+    def __init__(self, signed=False, width=1):
+        self.signed = signed
+        self.width = width
+    def __str__(self):
+        ret = 'UInt'
+        if self.signed:
+            ret = 'SInt'
+        ret += '<'+str(self.width)+'>'
+        return ret
+
+class Wire:
+    def __init__(self):
+        self.wire_id = None
+        self.ftype = None
+        self.port_dir = None
+        self.port_num = None
+
+    def __str__(self):
+        ret = 'wire'
+        if self.port_dir:
+            ret += ' ' + self.port_dir + ' ' + str(self.port_num)
+        if self.ftype.width > 1:
+            ret += ' width ' + str(self.ftype.width)
+        ret += ' ' + self.wire_id
+        return ret
+
+class Module:
+    def __init__(self, mod_id, wires):
+        self.mod_id = mod_id
+        self.wires = wires
+
+    def __str__(self):
+        ret = 'module ' + self.mod_id + '\n'
+        for wire in self.wires.values():
+            ret += '  ' + str(wire) + '\n'
+        ret += 'end\n'
+        return ret
+
+class lofirrtlPrintListener(lofirrtlListener):
+
+    def __str__(self):
+        ret = ''
+        for mod in self.modules:
+            ret += str(mod)
+        return ret
+
+    def enterCircuit(self, ctx):
+        self.modules = []
+
+    def enterModule(self, ctx):
+        # global data in module
+        self.wires = {}
+        self.port_num = 1
+        self.inferwire_num = 1
+
+    def enterModule_id(self, ctx):
+        ctx.parentCtx.mod_id = '\\' + ctx.getText()
+
+    def exitModule(self, ctx):
+        mod = Module(ctx.mod_id, self.wires)
+        self.modules.append(mod)
+
+    def enterPort(self, ctx):
+        ctx.wire = Wire()
+        ctx.wire.port_num = self.port_num
+        self.port_num += 1
+
+    def enterPort_id(self, ctx):
+        ctx.parentCtx.wire.wire_id = '\\'+ ctx.getText()
+
+    def enterPort_dir(self, ctx):
+        ctx.parentCtx.wire.port_dir = ctx.getText()
+
+    def enterFtype(self, ctx):
+        ctx.ftype = Type()
+        if ctx.getText()[0] is 'S':
+            ctx.ftype.signed = True
+
+    def enterWidth(self, ctx):
+        ctx.parentCtx.ftype.width = int(ctx.getText())
+
+    def exitFtype(self, ctx):
+        ctx.parentCtx.wire.ftype = ctx.ftype
+    
+    def exitPort(self, ctx):
+        self.wires[ctx.wire.wire_id] = ctx.wire
+
+    def enterReg(self, ctx):
+        ctx.wire = Wire()
+
+    def enterReg_id(self, ctx):
+        ctx.parentCtx.wire.wire_id = '\\'+ ctx.getText()
+
+    def exitReg(self, ctx):
+        self.wires[ctx.wire.wire_id] = ctx.wire
+
+    def enterNode(self, ctx):
+        ctx.wire = Wire()
+
+    def enterNode_id(self, ctx):
+        ctx.parentCtx.wire.wire_id = '\\'+ ctx.getText()
+
+    def exitNode_val(self, ctx):
+        ctx.parentCtx.wire.ftype = ctx.ftype
+
+    def exitNode(self, ctx):
+        self.wires[ctx.wire.wire_id] = ctx.wire
+    
+    def enterExp(self, ctx):
+        ctx.is_op = False
+
+    def exitExp(self, ctx):
+        if hasattr(ctx, 'ftype'):
+            ctx.parentCtx.ftype = ctx.ftype
+            ctx.parentCtx.is_op = ctx.is_op
+
+    def enterRef(self, ctx):
+        refname = '\\' + ctx.getText()
+        # does this reference something we know?
+        if refname in self.wires:
+            wire = self.wires[refname]
+            ctx.parentCtx.ftype = wire.ftype
+
+    def enterConst(self, ctx):
+        ctx.ftype = Type()
+        if ctx.getText()[0] is 'S':
+            ctx.ftype.signed = True
+
+    def exitConst(self, ctx):
+        ctx.parentCtx.ftype = ctx.ftype
+
+    def enterPrimop(self, ctx):
+        ctx.argtypes = []
+        ctx.params = []
+        ctx.opname = None
+
+    def enterPrimop_name(self, ctx):
+        ctx.parentCtx.opname = ctx.getText()[:-1]
+
+    def exitOp_argument(self, ctx):
+        ctx.parentCtx.argtypes.append(ctx.ftype)
+        if hasattr(ctx, 'is_op') and ctx.is_op:
+            inferwire = Wire()
+            inferwire.ftype = ctx.ftype
+            inferwire.wire_id = '\\INFER_' + str(self.inferwire_num)
+            self.inferwire_num += 1
+            self.wires[inferwire.wire_id] = inferwire
+
+    def exitOp_parameter(self, ctx):
+        ctx.parentCtx.params.append(int(ctx.getText()))
+
+    def exitPrimop(self, ctx):
+        ftype = primop_type(ctx.opname, ctx.argtypes, ctx.params)
+        ctx.parentCtx.ftype = ftype
+        ctx.parentCtx.is_op = True
+
+
 def primop_type(op, arg, param):
     t = Type()
     if op == 'add':
@@ -79,176 +238,11 @@ def primop_type(op, arg, param):
     elif op == 'tail':
         t.signed = False
         t.width = arg[0].width - param[0]
+    elif op in ['mux', 'validif']:
+        t.signed = arg[1].signed
+        t.width = arg[1].width
     return t
 
-class Type:
-    def __init__(self, signed=False, width=1):
-        self.signed = signed
-        self.width = width
-    def __str__(self):
-        ret = 'UInt'
-        if self.signed:
-            ret = 'SInt'
-        ret += '<'+str(self.width)+'>'
-        return ret
-
-class Wire:
-    def __init__(self):
-        self.wire_id = None
-        self.ftype = Type()
-        self.port_dir = None
-        self.port_num = None
-        self.unknown_type = False
-
-    def __str__(self):
-        ret = 'wire'
-        if self.port_dir:
-            ret += ' ' + self.port_dir + ' ' + str(self.port_num)
-        if self.ftype.width > 1:
-            ret += ' width ' + str(self.ftype.width)
-        ret += ' ' + self.wire_id
-        return ret
-
-class Module:
-    def __init__(self, fid):
-        self.fid = fid
-
-class lofirrtlPrintListener(lofirrtlListener):
-    def setupMembers(self):
-        self.wires = {}
-        self.currWire = None
-        self.port_num = 1
-        self.anonwire_num = 1
-
-    def enterModule_id(self, ctx):
-        print 'module \\' + ctx.getText()
-
-    def exitModule(self, ctx):
-        print 'end'
-
-    def enterPort(self, ctx):
-        self.currWire = Wire()
-        self.currWire.port_num = self.port_num
-
-    def enterPort_id(self, ctx):
-        self.currWire.wire_id = '\\'+ ctx.getText()
-
-    def enterPort_dir(self, ctx):
-        self.currWire.port_dir = ctx.getText()
-
-    def exitPort(self, ctx):
-        self.wires[self.currWire.wire_id] = self.currWire
-        print '  ' + str(self.currWire)
-        self.currWire = None
-        self.port_num += 1
-
-    def enterReg(self, ctx):
-        self.currWire = Wire()
-
-    def enterReg_id(self, ctx):
-        self.currWire.wire_id = '\\' + ctx.getText()
-
-    def exitReg(self, ctx):
-        self.wires[self.currWire.wire_id] = self.currWire
-        print '  ' + str(self.currWire)
-        self.currWire = None
-
-    def enterPort_type(self, ctx):
-        if ctx.getText()[0] is 'S':
-            self.currWire.ftype.signed = True
-
-    def enterFtype_width(self, ctx):
-        if self.currWire:
-            self.currWire.ftype.width = int(ctx.getText())
-
-    def enterNode(self, ctx):
-        self.currWire = Wire()
-        self.unknown_type = True
-
-    def exitNode(self, ctx):
-        self.wires[self.currWire.wire_id] = self.currWire
-        if hasattr(ctx.exp(),'ftype'):
-            self.currWire.ftype = ctx.exp().ftype
-            print '  ' + str(self.currWire)
-        self.currWire = None
-
-    def enterNode_id(self, ctx):
-        self.currWire.wire_id = '\\' + ctx.getText()
-
-    def exitExp(self, ctx):
-        # if you know your type, tell your parent
-        if hasattr(ctx, 'ftype'):
-            ctx.parentCtx.ftype = ctx.ftype
-
-    def enterRef(self, ctx):
-        refname = '\\' + ctx.getText()
-        # does this reference something we know?
-        if refname in self.wires:
-            wire = self.wires[refname]
-            # tell exp your type
-            ctx.parentCtx.ftype = wire.ftype
-        else:
-            if self.currWire.wire_id != refname:
-                print 'cant find: ' + refname
-
-    def exitConst(self, ctx):
-        # tell exp your type
-        const_type = Type()
-        if ctx.getText()[0] is 'S':
-            const_type.signed = True
-        const_type.width = int(ctx.const_width().getText())
-        ctx.parentCtx.ftype = const_type
-
-    def exitMux_pred_high(self, ctx):
-        # if you know your type, tell mux
-        if hasattr(ctx,'ftype'):
-            ctx.parentCtx.high_type = ctx.ftype
-
-    def exitMux_pred_else(self, ctx):
-        # if you know your type, tell mux
-        if hasattr(ctx,'ftype'):
-            ctx.parentCtx.else_type = ctx.ftype
-
-    def exitMux(self, ctx):
-        # if either of your kids know their type, tell your parent
-        if hasattr(ctx,'high_type'):
-            ctx.parentCtx.ftype = ctx.high_type
-        elif hasattr(ctx,'else_type'):
-            ctx.parentCtx.ftype = ctx.else_type
-        else:
-            print 'something screwy is going on here'
-
-    def enterValid_in(self, ctx):
-        # if you know your type, tell your parent
-        if hasattr(ctx,'ftype'):
-            ctx.parentCtx.ftype = ctx.ftype
-
-    def exitValidif(self, ctx):
-        # if you know your type, tell your parent
-        if hasattr(ctx,'ftype'):
-            ctx.parentCtx.ftype = ctx.ftype
-
-    def enterPrimop(self, ctx):
-        ctx.argtypes = []
-        ctx.params = []
-        ctx.opname = None
-
-    def enterPrimop_name(self, ctx):
-        ctx.parentCtx.opname = ctx.getText()[:-1]
-
-    def exitPrimop_name(self, ctx):
-        ctx.parentCtx.opname = ctx.getText()[:-1]
-
-    def exitOp_argument(self, ctx):
-        if hasattr(ctx,'ftype'):
-            ctx.parentCtx.argtypes.append(ctx.ftype)
-
-    def exitOp_parameter(self, ctx):
-        ctx.parentCtx.params.append(int(ctx.getText()))
-
-    def exitPrimop(self, ctx):
-        ftype = primop_type(ctx.opname, ctx.argtypes, ctx.params)
-        ctx.parentCtx.ftype = ftype
 
 def main():
     lexer = lofirrtlLexer(FileStream('lofirrtl/gcd.fir'))
@@ -258,9 +252,9 @@ def main():
     tree = parser.circuit()
 
     printer = lofirrtlPrintListener()
-    printer.setupMembers()
     walker = ParseTreeWalker()
     walker.walk(printer, tree)
+    print printer
 
 if __name__ == '__main__':
     main()
