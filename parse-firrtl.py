@@ -10,6 +10,7 @@ class Type:
     def __init__(self, signed=False, width=1):
         self.signed = signed
         self.width = width
+
     def __str__(self):
         ret = 'UInt'
         if self.signed:
@@ -23,6 +24,7 @@ class Wire:
         self.ftype = None
         self.port_dir = None
         self.port_num = None
+        self.is_reg = False
 
     def __str__(self):
         ret = 'wire'
@@ -32,6 +34,33 @@ class Wire:
             ret += ' width ' + str(self.ftype.width)
         ret += ' ' + self.wire_id
         return ret
+
+easy_cells = {'add'  : 'add',
+              'sub'  : 'sub',
+              'mul'  : 'mul',
+              'div'  : 'div',
+              'rem'  : 'mod',
+              'lt'   : 'lt',
+              'leq'  : 'le',
+              'gt'   : 'gt',
+              'geq'  : 'ge',
+              'eq'   : 'eq',
+              'shl'  : 'shl'
+              'shr'  : 'shr'
+              'neg'  : 'neg'
+              'not'  : 'not'
+              'and'  : 'and'
+              'or'   : 'or'
+              'xor'  : 'xor'
+              'andr' : 'reduce_and'
+              'orr'  : 'reduce_or'
+              'xorr' : 'reduce_xor'
+              'mux'  : 'mux'}
+
+class Cell:
+    def __init__(self):
+        self.params = []
+        self.connects = []
 
 class Module:
     def __init__(self, mod_id, wires):
@@ -59,6 +88,7 @@ class lofirrtlPrintListener(lofirrtlListener):
     def enterModule(self, ctx):
         # global data in module
         self.wires = {}
+        self.cells = []
         self.port_num = 1
         self.inferwire_num = 1
 
@@ -90,12 +120,13 @@ class lofirrtlPrintListener(lofirrtlListener):
 
     def exitFtype(self, ctx):
         ctx.parentCtx.wire.ftype = ctx.ftype
-    
+
     def exitPort(self, ctx):
         self.wires[ctx.wire.wire_id] = ctx.wire
 
     def enterReg(self, ctx):
         ctx.wire = Wire()
+        ctx.wire.is_reg = True
 
     def enterReg_id(self, ctx):
         ctx.parentCtx.wire.wire_id = '\\'+ ctx.getText()
@@ -114,7 +145,7 @@ class lofirrtlPrintListener(lofirrtlListener):
 
     def exitNode(self, ctx):
         self.wires[ctx.wire.wire_id] = ctx.wire
-    
+
     def enterExp(self, ctx):
         ctx.is_op = False
 
@@ -135,8 +166,18 @@ class lofirrtlPrintListener(lofirrtlListener):
         if ctx.getText()[0] is 'S':
             ctx.ftype.signed = True
 
+    def enterConst_ival(self, ctx):
+        ctx.parentCtx.val = ctx.getText()
+        ctx.parentCtx.valtype = 'i'
+
+    def enterConst_bval(self, ctx):
+        ctx.parentCtx.val = ctx.getText()
+        ctx.parentCtx.valtype = 'b'-0
+
     def exitConst(self, ctx):
         ctx.parentCtx.ftype = ctx.ftype
+        ctx.parentCtx.val = ctx.val
+        ctx.parentCtx.valtype = ctx.valtype
 
     def enterPrimop(self, ctx):
         ctx.argtypes = []
@@ -162,6 +203,8 @@ class lofirrtlPrintListener(lofirrtlListener):
         ftype = primop_type(ctx.opname, ctx.argtypes, ctx.params)
         ctx.parentCtx.ftype = ftype
         ctx.parentCtx.is_op = True
+        if ctx.opname in easy_cells:
+            cell = Cell()
 
 
 def primop_type(op, arg, param):
@@ -179,7 +222,7 @@ def primop_type(op, arg, param):
         t.signed = arg[0].signed or arg[1].signed
         t.width = arg[0].width
         if arg[1].signed: t.width += 1
-    elif op == 'mod':
+    elif op == 'rem':
         t.signed = arg[0].signed
         t.width = min(arg[0].width, arg[1].width)
         if arg[0].signed and not arg[1].signed: t.width + 1
