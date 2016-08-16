@@ -116,7 +116,7 @@ class lofirrtlPrintListener(lofirrtlListener):
             ctx.ftype.signed = True
 
     def enterWidth(self, ctx):
-        ctx.parentCtx.ftype.width = int(ctx.getText())
+        ctx.parentCtx.ftype.width = ctx.ival
 
     def exitFtype(self, ctx):
         ctx.parentCtx.wire.ftype = ctx.ftype
@@ -167,12 +167,12 @@ class lofirrtlPrintListener(lofirrtlListener):
             ctx.ftype.signed = True
 
     def enterConst_ival(self, ctx):
-        ctx.parentCtx.val = ctx.getText()
+        ctx.parentCtx.val = ctx.ival
         ctx.parentCtx.valtype = 'i'
 
     def enterConst_bval(self, ctx):
         ctx.parentCtx.val = ctx.getText()
-        ctx.parentCtx.valtype = 'b'-0
+        ctx.parentCtx.valtype = 'b'
 
     def exitConst(self, ctx):
         ctx.parentCtx.ftype = ctx.ftype
@@ -205,6 +205,17 @@ class lofirrtlPrintListener(lofirrtlListener):
         ctx.parentCtx.is_op = True
         if ctx.opname in easy_cells:
             cell = Cell()
+
+    def enterIntLit(self, ctx):
+        ctx.parentCtx.ival = parse_int(ctx.getText())
+
+
+def parse_int(s):
+    if s == '0'
+        return 0
+    if s.startswith('"h'):
+        return int(s[2:-1],16)
+    return int(s)
 
 
 def primop_type(op, arg, param):
