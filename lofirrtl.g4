@@ -81,7 +81,7 @@ ftype
   ;
 
 width
-  : IntLit
+  : intLit
   ;
 
 moduleBlock
@@ -121,7 +121,7 @@ stmt
   | node
   | connect
   | fid 'is' 'invalid' info?
-  | 'stop(' exp exp IntLit ')' info?
+  | 'stop(' exp exp intLit ')' info?
   | 'printf(' exp exp StringLit ( exp)* ')' info?
   | 'skip' info?
   ;
@@ -236,7 +236,7 @@ const
   ;
 
 const_ival
-  : IntLit
+  : intLit
   ;
 
 const_bval
@@ -253,7 +253,7 @@ op_argument
   ;
 
 op_parameter
-  : IntLit
+  : intLit
   ;
 
 fid
@@ -348,6 +348,10 @@ primop_name
   | 'tail('
   | 'mux('
   | 'validif('
+  ;
+
+intLit
+  : IntLit
   ;
 
 /*------------------------------------------------------------------
