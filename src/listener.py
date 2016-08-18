@@ -1,104 +1,17 @@
-from antlr4 import *
-from lofirrtlLexer import lofirrtlLexer
+"""
+this module is for classes and methods that actually
+parse and process the syntax tree
+"""
 from lofirrtlListener import lofirrtlListener
-from lofirrtlParser import lofirrtlParser
-from denting import Denter
-import sys
+from ilang import Type, Wire, Cell, Module
 
-
-class Type:
-    def __init__(self, signed=False, width=1):
-        self.signed = signed
-        self.width = width
-
-    def __str__(self):
-        ret = 'UInt'
-        if self.signed:
-            ret = 'SInt'
-        ret += '<'+str(self.width)+'>'
-        return ret
-
-class Wire:
-    def __init__(self):
-        self.wire_id = None
-        self.ftype = None
-        self.port_dir = None
-        self.port_num = None
-        self.is_reg = False
-
-    def __str__(self):
-        ret = 'wire'
-        if self.port_dir:
-            ret += ' ' + self.port_dir + ' ' + str(self.port_num)
-        if self.ftype.width > 1:
-            ret += ' width ' + str(self.ftype.width)
-        ret += ' ' + self.wire_id
-        return ret
-
-class Cell:
-    def __init__(self,
-                 op_name,
-                 ret_type,
-                 arg_vals,
-                 arg_types,
-                 unique_name):
-        self.op_name = op_name
-        self.ret_type = ret_type
-        self.arg_vals = arg_vals
-        self.arg_types= arg_types
-        self.ret_val = None
-        self.unique_name = unique_name
-
-    def __str__(self):
-        ret = '  cell $' + self.op_name + ' '
-        ret += self.unique_name + '\n'
-        if len(self.arg_types)>2:
-            self.arg_types = self.arg_types[1:] + [self.arg_types[0]]
-            self.arg_vals = self.arg_vals[1:] + [self.arg_vals[0]]
-        arg_names = ['A','B','S']
-        for i, arg_type in enumerate(self.arg_types):
-            ret += '    parameter \\'
-            ret += arg_names[i]
-            ret += '_SIGNED '
-            if arg_type.signed:
-                ret += '1'
-            else:
-                ret += '0'
-            ret += '\n    parameter \\'
-            ret += arg_names[i]
-            ret += '_WIDTH ' 
-            ret += str(arg_type.width) + '\n'
-        ret += '    parameter \\Y_WIDTH '
-        ret += str(self.ret_type.width) + '\n'
-        for i, arg in enumerate(self.arg_vals):
-            ret += '    connect \\'
-            ret += arg_names[i]
-            ret += ' ' + str(arg) + '\n'
-        ret += '    connect \\Y '
-        ret += str(self.ret_val)
-        ret += '\n  end\n'
-        return ret
-
-class Module:
-    def __init__(self, mod_id, wires, cells, connects):
-        self.mod_id = mod_id
-        self.wires = wires
-        self.cells = cells
-        self.connects = connects
-
-    def __str__(self):
-        ret = 'module ' + self.mod_id + '\n'
-        for wire in self.wires.values():
-            ret += '  ' + str(wire) + '\n'
-        for cell in self.cells:
-            ret += str(cell)
-        for connect in self.connects:
-            ret += '  connect '
-            ret += connect[0] + ' ' + connect[1] + '\n'
-        ret += 'end\n'
-        return ret
-
-class lofirrtlPrintListener(lofirrtlListener):
+class IlangListener(lofirrtlListener):
+    """ this class follows a basic pattern
+    * enterParent sets up default values and data structures in it's context
+    * exitChild assigns values to the _parent_ context
+    * exitParent packages module-level data and saves it in self
+    Avoid accessing your children!
+    """
 
     def __str__(self):
         ret = ''
@@ -110,10 +23,11 @@ class lofirrtlPrintListener(lofirrtlListener):
         self.modules = []
 
     def enterModule(self, ctx):
-        # global data in module
+        # reset self data, modules constitute a namespace
         self.wires = {}
         self.cells = []
         self.connects = []
+        # for things that need unique names or numbers
         self.port_num = 1
         self.inferwire_num = 1
         self.cell_num = 1
@@ -143,7 +57,7 @@ class lofirrtlPrintListener(lofirrtlListener):
         ctx.ftype = Type()
         if ctx.getText()[0] is 'S':
             ctx.ftype.signed = True
-    
+
     def exitWidth(self, ctx):
         ctx.parentCtx.ftype.width = ctx.ival
 
@@ -154,6 +68,7 @@ class lofirrtlPrintListener(lofirrtlListener):
         self.wires[ctx.wire.wire_id] = ctx.wire
 
     def enterReg(self, ctx):
+        # register is a special type of wire
         ctx.wire = Wire()
         ctx.wire.is_reg = True
 
@@ -164,6 +79,8 @@ class lofirrtlPrintListener(lofirrtlListener):
         self.wires[ctx.wire.wire_id] = ctx.wire
 
     def enterNode(self, ctx):
+        # honestly, I don't see why nodes even exist
+        # they are exactly like wires!
         ctx.wire = Wire()
 
     def enterNode_id(self, ctx):
@@ -181,9 +98,9 @@ class lofirrtlPrintListener(lofirrtlListener):
         if hasattr(ctx, 'cell'):
             ctx.cell.ret_val = ctx.wire.wire_id
         else:
-            # you are a reference or constant
+            # you must be a reference or constant
             self.connects.append((ctx.wire.wire_id, ctx.val))
-        
+
     def enterExp(self, ctx):
         ctx.is_op = False
 
@@ -195,7 +112,7 @@ class lofirrtlPrintListener(lofirrtlListener):
             ctx.parentCtx.val = ctx.val
         if hasattr(ctx, 'ret_cell'):
             ctx.parentCtx.ret_cell = ctx.ret_cell
-            
+
     def enterRef(self, ctx):
         refname = '\\' + ctx.getText()
         # does this reference something we know?
@@ -211,7 +128,7 @@ class lofirrtlPrintListener(lofirrtlListener):
 
     def exitConst_ival(self, ctx):
         ctx.parentCtx.val = ctx.ival
-        
+
     def enterConst_bval(self, ctx):
         ctx.parentCtx.val = ctx.getText()
 
@@ -239,7 +156,7 @@ class lofirrtlPrintListener(lofirrtlListener):
             ctx.cell.ret_val = ctx.lhs
         else:
             self.connects.append((ctx.lhs, ctx.val))
-            
+
     def enterPrimop_name(self, ctx):
         ctx.parentCtx.opname = ctx.getText()[:-1]
 
@@ -279,6 +196,8 @@ class lofirrtlPrintListener(lofirrtlListener):
 
 
 def parse_int(s):
+    """ This is not compliant to spec
+    but FIRRTL isn't either yet """
     if s == '0':
         return 0
     if s.startswith('"h'):
@@ -287,6 +206,8 @@ def parse_int(s):
 
 
 def primop_type(op, arg, param):
+    """ There's a terrible table in the spec that lays all of this
+    data out. It's terrible. I couldn't see any other way to code this"""
     t = Type()
     if op == 'add':
         t.signed = arg[0].signed or arg[1].signed
@@ -364,19 +285,3 @@ def primop_type(op, arg, param):
         t.signed = arg[1].signed
         t.width = arg[1].width
     return t
-
-
-def main():
-    lexer = lofirrtlLexer(FileStream('lofirrtl/gcd.fir'))
-    lexer.denter = Denter(lexer)
-    stream = CommonTokenStream(lexer)
-    parser = lofirrtlParser(stream)
-    tree = parser.circuit()
-
-    printer = lofirrtlPrintListener()
-    walker = ParseTreeWalker()
-    walker.walk(printer, tree)
-    print printer
-
-if __name__ == '__main__':
-    main()

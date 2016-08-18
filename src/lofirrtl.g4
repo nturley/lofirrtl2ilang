@@ -1,4 +1,8 @@
 /*
+Originally, this came from here
+https://github.com/ucb-bar/firrtl
+/*
+/*
 Copyright (c) 2014 - 2016 The Regents of the University of
 California (Regents). All Rights Reserved.  Redistribution and use in
 source and binary forms, with or without modification, are permitted
@@ -31,6 +35,7 @@ grammar lofirrtl;
 
 tokens { INDENT, DEDENT }
 
+// override nextToken with our denter's nextToken
 @lexer::members {
 # START SPECIAL MEMBER
 def nextToken(self):
@@ -38,16 +43,6 @@ def nextToken(self):
 # END SPECIAL MEMBER
 }
 
-/*------------------------------------------------------------------
- * PARSER RULES
- *------------------------------------------------------------------*/
-
-/* TODO
- *  - Add [info] support (all over the place)
- *  - Add support for extmodule
-*/
-
-// Does there have to be at least one module?
 circuit
   : 'circuit' fid ':' info? INDENT module* DEDENT
   ;
@@ -74,6 +69,8 @@ port_dir
   | 'output'
   ;
 
+// All components must be declared with a ground type
+// and explicit widths.
 ftype
   : 'UInt' '<' width '>'
   | 'SInt' '<' width '>'
@@ -88,78 +85,16 @@ moduleBlock
   : simple_stmt*
   ;
 
-simple_reset0
-  :  'reset' '=>' '(' reset_signal init_val ')'
-  ;
-
-reset_signal
-  : exp
-  ;
-
-init_val
-  : exp
-  ;
-
-simple_reset
-	: simple_reset0
-	| '(' simple_reset0 ')'
-	;
-
-reset_block
-	: INDENT simple_reset NEWLINE DEDENT
-	| '(' +  simple_reset + ')'
+simple_stmt
+  : stmt | NEWLINE
   ;
 
 stmt
   : wire
   | reg
-  | 'mem' fid ':' info? INDENT memField* DEDENT
-  | 'cmem' fid ':' ftype info?
-  | 'smem' fid ':' ftype info?
-  | mdir 'mport' fid '=' fid '[' exp ']' exp info?
-  | instance
+  | instance // not implemented yet
   | node
   | connect
-  | fid 'is' 'invalid' info?
-  | 'stop(' exp exp intLit ')' info?
-  | 'printf(' exp exp StringLit ( exp)* ')' info?
-  | 'skip' info?
-  ;
-
-instance
-  : 'inst' instance_id 'of' instance_of_id info?
-  ;
-
-instance_id
-  : fid
-  ;
-
-instance_of_id
-  : fid
-  ;
-
-connect
-  : connected_lhs '<=' connected_rhs info?
-  ;
-
-connected_lhs
-  : ref
-  ;
-
-connected_rhs
-  : exp
-  ;
-
-node
-  : 'node' node_id '=' node_val info?
-  ;
-
-node_id
-  : fid
-  ;
-
-node_val
-  : exp
   ;
 
 wire
@@ -182,42 +117,6 @@ reg_clk
   : exp
   ;
 
-reg_reset
-  : 'with' ':' reset_block
-  ;
-
-memField
-	:  'data-type' '=>' ftype NEWLINE
-	| 'depth' '=>' IntLit NEWLINE
-	| 'read-latency' '=>' IntLit NEWLINE
-	| 'write-latency' '=>' IntLit NEWLINE
-	| 'read-under-write' '=>' ruw NEWLINE
-	| 'reader' '=>' fid+ NEWLINE
-	| 'writer' '=>' fid+ NEWLINE
-	| 'readwriter' '=>' fid+ NEWLINE
-	;
-
-simple_stmt
-  : stmt | NEWLINE
-  ;
-
-info
-  : FileInfo
-  ;
-
-mdir
-  : 'infer'
-  | 'read'
-  | 'write'
-  | 'rdwr'
-  ;
-
-ruw
-  : 'old'
-  | 'new'
-  | 'undefined'
-  ;
-
 exp
   : const
   | ref
@@ -226,6 +125,78 @@ exp
 
 ref
   : fid
+  ;
+
+reg_reset
+  : 'with' ':' reset_block
+  ;
+
+reset_signal
+  : exp
+  ;
+
+reset_block
+  : INDENT simple_reset NEWLINE DEDENT
+  | '(' +  simple_reset + ')'
+  ;
+
+// optional parentheses
+simple_reset
+  : simple_reset0
+  | '(' simple_reset0 ')'
+  ;
+
+// firrtl likes to make this reference reg_id
+// sometimes firrtl likes to do irritating things
+init_val
+  : exp
+  ;
+
+// this is new syntax, old spec says something else
+simple_reset0
+  :  'reset' '=>' '(' reset_signal init_val ')'
+  ;
+
+// not implemented yet
+instance
+  : 'inst' instance_id 'of' instance_of_id info?
+  ;
+
+instance_id
+  : fid
+  ;
+
+instance_of_id
+  : fid
+  ;
+
+node
+  : 'node' node_id '=' node_val info?
+  ;
+
+node_id
+  : fid
+  ;
+
+node_val
+  : exp
+  ;
+
+connect
+  : connected_lhs '<=' connected_rhs info?
+  ;
+
+connected_lhs
+  : ref
+  ;
+
+connected_rhs
+  : exp
+  ;
+
+// not implemented yet
+info
+  : FileInfo
   ;
 
 const
@@ -239,15 +210,18 @@ const_ival
   : intLit
   ;
 
+// not implemented yet
 const_bval
   : StringLit
   ;
 
 // primop name includes open parenthesis
+// in practice I think there is at most one parameter
 primop
   : primop_name op_argument*  op_parameter* ')'
   ;
 
+// 1, 2 or 3 arguments
 op_argument
   : exp
   ;
@@ -261,7 +235,6 @@ fid
   | keyword
   ;
 
-// I think this is just error detection
 keyword
   : 'circuit'
   | 'module'
@@ -311,8 +284,8 @@ keyword
   | 'rdwr'
   ;
 
-// Parentheses are added as part of name because semantics require no space between primop and open parentheses
-// (And ANTLR either ignores whitespace or considers it everywhere)
+// I'm not sure why its so important there is no space between
+// the op name and the open paren
 primop_name
   : 'add('
   | 'sub('
@@ -350,6 +323,7 @@ primop_name
   | 'validif('
   ;
 
+// I wrapped the rule so I could consolidate my int parsing code
 intLit
   : IntLit
   ;
@@ -358,6 +332,7 @@ intLit
  * LEXER RULES
  *------------------------------------------------------------------*/
 
+// this is not spec compliant
 IntLit
   : '0'
   | ( '+' | '-' )? [1-9] ( Digit )*
@@ -405,13 +380,13 @@ fragment COMMENT
   ;
 
 fragment WHITESPACE
-	: [ \t,]+
-	;
+  : [ \t,]+
+  ;
 
 SKIP_
-	: ( WHITESPACE | COMMENT ) -> skip
-	;
+  : ( WHITESPACE | COMMENT ) -> skip
+  ;
 
 NEWLINE
-	:'\r'? '\n' ' '*
-	;
+  :'\r'? '\n' ' '*
+  ;
